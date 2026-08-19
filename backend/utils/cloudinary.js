@@ -1,4 +1,5 @@
 const cloudinary = require('cloudinary').v2;
+const path = require('path');
 const fs = require('fs');
 
 if (
@@ -16,6 +17,7 @@ if (
 
 /**
  * Upload local file to Cloudinary persistent storage
+ * Handles images (JPG/PNG/WEBP) as 'image' and PDFs as 'raw' for browser preview.
  * @param {string} filePath - Absolute path to local file saved by Multer
  * @param {string} folder - Folder name ('selfies' or 'documents')
  * @returns {Promise<string|null>} - Persistent HTTPS Cloudinary URL or null
@@ -27,9 +29,12 @@ const uploadToCloudinary = async (filePath, folder = 'uploads') => {
     process.env.CLOUDINARY_API_SECRET
   ) {
     try {
+      const ext = path.extname(filePath).toLowerCase();
+      const isPdf = ext === '.pdf';
+
       const result = await cloudinary.uploader.upload(filePath, {
         folder: `ezfinanz/${folder}`,
-        resource_type: 'auto'
+        resource_type: isPdf ? 'raw' : 'image'
       });
 
       // Remove temporary file from local filesystem after upload
