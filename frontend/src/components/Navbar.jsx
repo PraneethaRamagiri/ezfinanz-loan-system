@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLoan } from '../context/LoanContext';
-import { ShieldCheck, LogOut, User, Landmark, HelpCircle } from 'lucide-react';
+import { ShieldCheck, LogOut } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -15,17 +15,18 @@ export default function Navbar() {
   };
 
   return (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand Logo */}
+        {/* Official Brand Logo Wordmark */}
         <Link to="/" className="flex items-center space-x-3 group">
-          <div className="bg-emerald-600 text-white p-2 rounded-xl group-hover:bg-emerald-700 transition-colors shadow-sm">
-            <Landmark className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xl font-extrabold text-slate-900 tracking-tight">EZ<span className="text-emerald-600">FINANZ</span></span>
-            <span className="hidden sm:inline-block ml-2 text-xs font-semibold uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">Personal Loans</span>
-          </div>
+          <img
+            src="/assets/ezfinanz_logo.png"
+            alt="EZFinanz"
+            className="h-8 sm:h-9 w-auto object-contain"
+          />
+          <span className="hidden sm:inline-block text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-md border border-emerald-200">
+            Personal Loans
+          </span>
         </Link>
 
         {/* User Info & Actions */}
@@ -43,7 +44,7 @@ export default function Navbar() {
             ) : null}
 
             <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
-              <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm">
+              <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-sm shadow-2xs">
                 {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
               </div>
               <div className="hidden sm:block text-left">
@@ -53,7 +54,7 @@ export default function Navbar() {
 
               <button
                 onClick={handleLogout}
-                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-2"
+                className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-2 cursor-pointer"
                 title="Logout"
               >
                 <LogOut className="w-5 h-5" />
@@ -70,7 +71,7 @@ export default function Navbar() {
             </Link>
             <Link
               to="/signup"
-              className="text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg shadow-sm transition-all"
+              className="text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-xl shadow-sm transition-all"
             >
               Apply Now
             </Link>
