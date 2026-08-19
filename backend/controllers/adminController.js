@@ -5,6 +5,49 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { cloudinary } = require('../utils/cloudinary');
+
+// Helper to parse cloudName, resourceType, and publicId from a Cloudinary URL
+const parseCloudinaryUrl = (urlStr) => {
+  try {
+    const u = new URL(urlStr);
+    const parts = u.pathname.split('/').filter(Boolean);
+    const resTypeIdx = parts.indexOf('upload');
+    if (resTypeIdx > 0) {
+      const resourceType = parts[resTypeIdx - 1];
+      let publicIdParts = parts.slice(resTypeIdx + 1);
+      if (publicIdParts.length > 0 && /^s--[a-zA-Z0-9_-]+--$/.test(publicIdParts[0])) {
+        publicIdParts = publicIdParts.slice(1);
+      }
+      if (publicIdParts.length > 0 && /^v\d+$/i.test(publicIdParts[0])) {
+        publicIdParts = publicIdParts.slice(1);
+      }
+      const publicId = publicIdParts.join('/');
+      return { cloudName: parts[0], resourceType, publicId };
+    }
+  } catch (e) {}
+  return null;
+};
+
+// Helper to fetch buffer from HTTP/HTTPS URL
+const fetchBufferFromUrl = (targetUrl) => {
+  return new Promise((resolve) => {
+    const client = targetUrl.startsWith('https://') ? https : http;
+    client.get(targetUrl, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode,
+          headers: res.headers,
+          buffer: Buffer.concat(chunks)
+        });
+      });
+    }).on('error', (err) => {
+      resolve({ statusCode: 500, error: err, buffer: Buffer.alloc(0) });
+    });
+  });
+};
 
 // Get All Applications for Admin Dashboard
 exports.getAllApplications = async (req, res, next) => {
@@ -246,7 +289,7 @@ exports.streamKycDocument = async (req, res, next) => {
 
     let documentUrl = application.kyc.documentPath;
 
-    // If local relative path, read directly from server disk
+    // Handle local disk relative path
     if (!documentUrl.startsWith('http://') && !documentUrl.startsWith('https://')) {
       const localFilePath = path.join(__dirname, '..', documentUrl);
       if (!fs.existsSync(localFilePath)) {
@@ -259,56 +302,88 @@ exports.streamKycDocument = async (req, res, next) => {
       const buffer = fs.readFileSync(localFilePath);
       const isPdf = documentUrl.toLowerCase().endsWith('.pdf') || buffer.slice(0, 1024).toString('binary').includes('%PDF');
       res.setHeader('Content-Type', isPdf ? 'application/pdf' : 'image/jpeg');
-      res.setHeader('Content-Disposition', 'inline; filename="KYC_Document"');
+      res.setHeader('Content-Disposition', 'inline; filename="KYC_Document.pdf"');
       res.setHeader('Content-Length', buffer.length);
       return res.send(buffer);
     }
 
-    // If Cloudinary / Remote HTTPS URL, fetch raw bytes directly from cloud
-    const client = documentUrl.startsWith('https://') ? https : http;
+    // Handle Cloudinary / Remote HTTPS URL
+    let fetchRes = await fetchBufferFromUrl(documentUrl);
 
-    client.get(documentUrl, (cloudRes) => {
-      if (cloudRes.statusCode >= 400) {
-        return res.status(cloudRes.statusCode).json({
-          success: false,
-          error: {
-            code: 'REMOTE_FETCH_FAILED',
-            message: `Cloudinary storage returned HTTP ${cloudRes.statusCode} status.`
-          }
-        });
-      }
+    // If initial fetch returned HTTP 401/403/404 or invalid PDF bytes, generate signed Cloudinary URL and retry
+    if (fetchRes.statusCode >= 400 || (fetchRes.buffer && !fetchRes.buffer.slice(0, 1024).toString('binary').includes('%PDF') && documentUrl.toLowerCase().endsWith('.pdf'))) {
+      const parsed = parseCloudinaryUrl(documentUrl);
+      if (parsed) {
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME || parsed.cloudName;
+        const apiKey = process.env.CLOUDINARY_API_KEY;
+        const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-      const chunks = [];
-      cloudRes.on('data', (chunk) => chunks.push(chunk));
-      cloudRes.on('end', () => {
-        const buffer = Buffer.concat(chunks);
-
-        // Inspect header bytes for PDF magic bytes (%PDF)
-        const pdfMagicString = buffer.slice(0, 1024).toString('binary');
-        const isPdf = pdfMagicString.includes('%PDF');
-
-        if (!isPdf && documentUrl.toLowerCase().endsWith('.pdf')) {
-          return res.status(400).json({
-            success: false,
-            error: {
-              code: 'INVALID_PDF',
-              message: 'Downloaded Cloudinary asset is not a valid PDF document.'
-            }
+        if (cloudName && apiKey && apiSecret) {
+          cloudinary.config({
+            cloud_name: cloudName.trim(),
+            api_key: apiKey.trim(),
+            api_secret: apiSecret.trim(),
+            secure: true
           });
-        }
 
-        res.setHeader('Content-Type', isPdf ? 'application/pdf' : cloudRes.headers['content-type'] || 'image/jpeg');
-        res.setHeader('Content-Disposition', 'inline; filename="KYC_Document"');
-        res.setHeader('Content-Length', buffer.length);
-        return res.send(buffer);
-      });
-    }).on('error', (fetchErr) => {
-      console.error('[Cloudinary Proxy Fetch Error]', fetchErr.message);
-      return res.status(502).json({
+          // Attempt 1: Signed URL with original resourceType (e.g. 'image')
+          const signedUrlImg = cloudinary.url(parsed.publicId, {
+            cloud_name: cloudName,
+            resource_type: parsed.resourceType || 'image',
+            type: 'upload',
+            sign_url: true,
+            secure: true
+          });
+
+          let retryRes = await fetchBufferFromUrl(signedUrlImg);
+
+          // Attempt 2: Signed URL with resource_type 'raw'
+          if (retryRes.statusCode >= 400 || (documentUrl.toLowerCase().endsWith('.pdf') && !retryRes.buffer.slice(0, 1024).toString('binary').includes('%PDF'))) {
+            const signedUrlRaw = cloudinary.url(parsed.publicId, {
+              cloud_name: cloudName,
+              resource_type: 'raw',
+              type: 'upload',
+              sign_url: true,
+              secure: true
+            });
+            retryRes = await fetchBufferFromUrl(signedUrlRaw);
+          }
+
+          if (retryRes.statusCode === 200) {
+            fetchRes = retryRes;
+          }
+        }
+      }
+    }
+
+    if (fetchRes.statusCode >= 400) {
+      return res.status(fetchRes.statusCode).json({
         success: false,
-        error: { code: 'PROXY_FETCH_ERROR', message: 'Failed to stream document from Cloudinary.' }
+        error: {
+          code: 'REMOTE_FETCH_FAILED',
+          message: `Cloudinary storage returned HTTP ${fetchRes.statusCode} status.`
+        }
       });
-    });
+    }
+
+    const buffer = fetchRes.buffer;
+    const pdfMagicString = buffer.slice(0, 1024).toString('binary');
+    const isPdf = pdfMagicString.includes('%PDF');
+
+    if (!isPdf && documentUrl.toLowerCase().endsWith('.pdf')) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_PDF',
+          message: 'Downloaded Cloudinary asset is not a valid PDF document (missing %PDF magic signature).'
+        }
+      });
+    }
+
+    res.setHeader('Content-Type', isPdf ? 'application/pdf' : fetchRes.headers['content-type'] || 'image/jpeg');
+    res.setHeader('Content-Disposition', 'inline; filename="KYC_Document.pdf"');
+    res.setHeader('Content-Length', buffer.length);
+    return res.send(buffer);
   } catch (err) {
     next(err);
   }
