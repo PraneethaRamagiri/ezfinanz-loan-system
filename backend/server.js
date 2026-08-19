@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
 
 dotenv.config();
 
@@ -17,12 +18,39 @@ const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// Ensure upload directories exist on server filesystem
+const uploadsDir = path.join(__dirname, 'uploads');
+const selfiesDir = path.join(uploadsDir, 'selfies');
+const docsDir = path.join(uploadsDir, 'documents');
+
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(selfiesDir)) fs.mkdirSync(selfiesDir, { recursive: true });
+if (!fs.existsSync(docsDir)) fs.mkdirSync(docsDir, { recursive: true });
+
+// CORS Middleware Configuration
+const allowedOrigins = [
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'https://ezfinanz-loan-portal.vercel.app',
+  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static uploaded files
+// Serve static uploaded files via absolute filesystem path
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Health check API

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, CheckCircle, XCircle, DollarSign, Calendar, User, FileText, Landmark, ShieldCheck, Clock, AlertTriangle } from 'lucide-react';
 import api from '../services/api';
 import { maskIdNumber, maskAccountNumber } from '../utils/validators';
+import { getUploadUrl } from '../utils/urlHelper';
 
 export default function AdminAppViewerModal({ appData, onClose, onRefresh }) {
   const [activeTab, setActiveTab] = useState('selfie');
@@ -139,7 +140,22 @@ export default function AdminAppViewerModal({ appData, onClose, onRefresh }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                 <div className="bg-slate-950 rounded-xl overflow-hidden aspect-4/3 flex items-center justify-center border-2 border-slate-800 shadow-inner">
                   {selfie?.photoPath ? (
-                    <img src={selfie.photoPath} alt="Submitted Selfie" className="w-full h-full object-cover" />
+                    <div className="w-full h-full relative flex items-center justify-center">
+                      <img
+                        src={getUploadUrl(selfie.photoPath)}
+                        alt="Submitted Selfie"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          if (e.target.nextSibling) {
+                            e.target.nextSibling.style.display = 'block';
+                          }
+                        }}
+                      />
+                      <div className="hidden p-4 text-center text-slate-400 text-xs font-semibold">
+                        <p>⚠️ Selfie image could not be loaded.</p>
+                      </div>
+                    </div>
                   ) : (
                     <p className="text-sm text-slate-500">No selfie submitted yet.</p>
                   )}
@@ -242,6 +258,19 @@ export default function AdminAppViewerModal({ appData, onClose, onRefresh }) {
                 <p><span className="text-slate-500">ID Type:</span> <strong>{kyc?.idType}</strong></p>
                 <p><span className="text-slate-500">ID Number:</span> <strong className="font-mono">{maskIdNumber(kyc?.idType, kyc?.idNumber)}</strong></p>
                 <p><span className="text-slate-500">Address:</span> <strong>{kyc?.address?.line1}, {kyc?.address?.city}, {kyc?.address?.state} - {kyc?.address?.pincode}</strong></p>
+                {kyc?.documentPath && (
+                  <div className="pt-2">
+                    <a
+                      href={getUploadUrl(kyc.documentPath)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>View Uploaded KYC Document</span>
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           )}

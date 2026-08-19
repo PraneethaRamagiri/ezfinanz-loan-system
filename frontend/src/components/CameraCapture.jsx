@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Camera, RefreshCw, Upload, AlertCircle } from 'lucide-react';
+import { getUploadUrl } from '../utils/urlHelper';
 
 export default function CameraCapture({ onCapture, onFileSelect, previewUrl }) {
   const videoRef = useRef(null);
@@ -168,7 +169,7 @@ export default function CameraCapture({ onCapture, onFileSelect, previewUrl }) {
       {/* Main Viewport */}
       <div className="relative w-full max-w-md mx-auto aspect-4/3 bg-slate-950 rounded-xl overflow-hidden border-2 border-slate-700 flex items-center justify-center">
         {capturedImage ? (
-          <img src={capturedImage} alt="Captured Selfie" className="w-full h-full object-cover" />
+          <img src={getUploadUrl(capturedImage)} alt="Captured Selfie" className="w-full h-full object-cover" />
         ) : cameraActive ? (
           <>
             <video
