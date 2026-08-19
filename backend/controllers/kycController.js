@@ -1,6 +1,7 @@
 const LoanApplication = require('../models/LoanApplication');
 const AuditLog = require('../models/AuditLog');
 const { validateDateOfBirth, validateIdDocument, maskIdNumber } = require('../utils/validators');
+const { uploadToCloudinary } = require('../utils/cloudinary');
 
 exports.submitKyc = async (req, res, next) => {
   try {
@@ -80,7 +81,8 @@ exports.submitKyc = async (req, res, next) => {
 
     let documentPath = application.kyc ? application.kyc.documentPath : null;
     if (req.file) {
-      documentPath = `/uploads/documents/${req.file.filename}`;
+      const cloudUrl = await uploadToCloudinary(req.file.path, 'documents');
+      documentPath = cloudUrl || `/uploads/documents/${req.file.filename}`;
     }
 
     const previousStage = application.currentStage;

@@ -1,6 +1,7 @@
 const LoanApplication = require('../models/LoanApplication');
 const AuditLog = require('../models/AuditLog');
-const PDFDocument = require('pdfkit');
+const { generateSanctionLetterPDF } = require('../utils/pdfGenerator');
+const { uploadToCloudinary } = require('../utils/cloudinary');
 const { maskAccountNumber } = require('../utils/validators');
 
 // Accept Declaration
@@ -75,7 +76,8 @@ exports.uploadSelfie = async (req, res, next) => {
     }
 
     const previousStage = application.currentStage;
-    const photoPath = `/uploads/selfies/${req.file.filename}`;
+    const cloudUrl = await uploadToCloudinary(req.file.path, 'selfies');
+    const photoPath = cloudUrl || `/uploads/selfies/${req.file.filename}`;
 
     application.selfie = {
       photoPath,
