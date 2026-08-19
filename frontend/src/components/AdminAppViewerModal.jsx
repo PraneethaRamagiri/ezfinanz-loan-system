@@ -260,15 +260,32 @@ export default function AdminAppViewerModal({ appData, onClose, onRefresh }) {
                 <p><span className="text-slate-500">Address:</span> <strong>{kyc?.address?.line1}, {kyc?.address?.city}, {kyc?.address?.state} - {kyc?.address?.pincode}</strong></p>
                 {kyc?.documentPath && (
                   <div className="pt-2">
-                    <a
-                      href={getUploadUrl(kyc.documentPath)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center space-x-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200"
-                    >
-                      <FileText className="w-4 h-4" />
-                      <span>View Uploaded KYC Document</span>
-                    </a>
+                    {kyc.documentPath.toLowerCase().includes('.pdf') ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const token = localStorage.getItem('ezfinanz_token');
+                          let baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                          baseUrl = baseUrl.replace(/\/api\/?$/i, '').replace(/\/+$/, '');
+                          const pdfStreamUrl = `${baseUrl}/api/admin/applications/${appData._id}/kyc-document?token=${token}`;
+                          window.open(pdfStreamUrl, '_blank');
+                        }}
+                        className="inline-flex items-center space-x-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 cursor-pointer"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>View Uploaded KYC Document (PDF)</span>
+                      </button>
+                    ) : (
+                      <a
+                        href={getUploadUrl(kyc.documentPath)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center space-x-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>View Uploaded KYC Document</span>
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

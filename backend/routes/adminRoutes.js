@@ -6,6 +6,7 @@ const { verifyToken, requireAdmin } = require('../middleware/authMiddleware');
 router.use(verifyToken, requireAdmin);
 
 router.get('/applications', adminController.getAllApplications);
+router.get('/applications/:id/kyc-document', adminController.streamKycDocument);
 router.get('/applications/:id', adminController.getApplicationById);
 router.post('/applications/:id/selfie-review', adminController.reviewSelfie);
 router.post('/applications/:id/disburse', adminController.confirmDisbursement);
