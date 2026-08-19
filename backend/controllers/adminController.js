@@ -7,14 +7,16 @@ const fs = require('fs');
 const path = require('path');
 const { cloudinary } = require('../utils/cloudinary');
 
-// Helper to parse cloudName, resourceType, and publicId from a Cloudinary URL
+// Helper to parse cloudName, resourceType, deliveryType, and publicId from a Cloudinary URL
 const parseCloudinaryUrl = (urlStr) => {
   try {
     const u = new URL(urlStr);
     const parts = u.pathname.split('/').filter(Boolean);
-    const resTypeIdx = parts.indexOf('upload');
+    const resTypeIdx = parts.findIndex(p => ['upload', 'private', 'authenticated'].includes(p.toLowerCase()));
+    
     if (resTypeIdx > 0) {
       const resourceType = parts[resTypeIdx - 1];
+      const deliveryType = parts[resTypeIdx];
       let publicIdParts = parts.slice(resTypeIdx + 1);
       if (publicIdParts.length > 0 && /^s--[a-zA-Z0-9_-]+--$/.test(publicIdParts[0])) {
         publicIdParts = publicIdParts.slice(1);
@@ -23,7 +25,7 @@ const parseCloudinaryUrl = (urlStr) => {
         publicIdParts = publicIdParts.slice(1);
       }
       const publicId = publicIdParts.join('/');
-      return { cloudName: parts[0], resourceType, publicId };
+      return { cloudName: parts[0], resourceType, deliveryType, publicId };
     }
   } catch (e) {}
   return null;
@@ -326,27 +328,48 @@ exports.streamKycDocument = async (req, res, next) => {
             secure: true
           });
 
-          // Attempt 1: Signed URL with original resourceType (e.g. 'image')
-          const signedUrlImg = cloudinary.url(parsed.publicId, {
+          const cleanPublicId = parsed.publicId.replace(/\.pdf$/i, '');
+          const isPdf = documentUrl.toLowerCase().endsWith('.pdf');
+
+          // Method A: Signed URL with clean publicId and format
+          const signedUrlA = cloudinary.url(cleanPublicId, {
             cloud_name: cloudName,
             resource_type: parsed.resourceType || 'image',
-            type: 'upload',
+            type: parsed.deliveryType || 'upload',
+            format: isPdf ? 'pdf' : '',
             sign_url: true,
             secure: true
           });
+          let retryRes = await fetchBufferFromUrl(signedUrlA);
 
-          let retryRes = await fetchBufferFromUrl(signedUrlImg);
+          // Method B: Signed Private Download URL
+          if (retryRes.statusCode >= 400 || (isPdf && !retryRes.buffer.slice(0, 1024).toString('binary').includes('%PDF'))) {
+            try {
+              const privateUrl = cloudinary.utils.private_download_url(cleanPublicId, isPdf ? 'pdf' : '', {
+                resource_type: parsed.resourceType || 'image',
+                type: parsed.deliveryType || 'upload',
+                expires_at: Math.floor(Date.now() / 1000) + 3600
+              });
+              const privateRes = await fetchBufferFromUrl(privateUrl);
+              if (privateRes.statusCode === 200) {
+                retryRes = privateRes;
+              }
+            } catch (e) {}
+          }
 
-          // Attempt 2: Signed URL with resource_type 'raw'
-          if (retryRes.statusCode >= 400 || (documentUrl.toLowerCase().endsWith('.pdf') && !retryRes.buffer.slice(0, 1024).toString('binary').includes('%PDF'))) {
+          // Method C: Raw resource_type retry
+          if (retryRes.statusCode >= 400 || (isPdf && !retryRes.buffer.slice(0, 1024).toString('binary').includes('%PDF'))) {
             const signedUrlRaw = cloudinary.url(parsed.publicId, {
               cloud_name: cloudName,
               resource_type: 'raw',
-              type: 'upload',
+              type: parsed.deliveryType || 'upload',
               sign_url: true,
               secure: true
             });
-            retryRes = await fetchBufferFromUrl(signedUrlRaw);
+            const rawRes = await fetchBufferFromUrl(signedUrlRaw);
+            if (rawRes.statusCode === 200) {
+              retryRes = rawRes;
+            }
           }
 
           if (retryRes.statusCode === 200) {
