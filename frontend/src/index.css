@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased selection:bg-emerald-100 selection:text-emerald-900;
+  }
+}
+
+/* Custom WebRTC overlay frame */
+.camera-mask {
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.65);
+}
