@@ -17,7 +17,7 @@ if (
 
 /**
  * Upload local file to Cloudinary persistent storage
- * Handles images (JPG/PNG/WEBP) as 'image' and PDFs as 'raw' for browser preview.
+ * Delivers PDF documents with Content-Type: application/pdf for native browser viewing
  * @param {string} filePath - Absolute path to local file saved by Multer
  * @param {string} folder - Folder name ('selfies' or 'documents')
  * @returns {Promise<string|null>} - Persistent HTTPS Cloudinary URL or null
@@ -32,10 +32,21 @@ const uploadToCloudinary = async (filePath, folder = 'uploads') => {
       const ext = path.extname(filePath).toLowerCase();
       const isPdf = ext === '.pdf';
 
-      const result = await cloudinary.uploader.upload(filePath, {
+      const uploadOptions = {
         folder: `ezfinanz/${folder}`,
-        resource_type: isPdf ? 'raw' : 'image'
-      });
+        resource_type: 'image'
+      };
+
+      if (isPdf) {
+        uploadOptions.format = 'pdf';
+      }
+
+      const result = await cloudinary.uploader.upload(filePath, uploadOptions);
+
+      let secureUrl = result.secure_url;
+      if (isPdf && !secureUrl.toLowerCase().endsWith('.pdf')) {
+        secureUrl = `${secureUrl}.pdf`;
+      }
 
       // Remove temporary file from local filesystem after upload
       if (fs.existsSync(filePath)) {
@@ -46,7 +57,7 @@ const uploadToCloudinary = async (filePath, folder = 'uploads') => {
         }
       }
 
-      return result.secure_url;
+      return secureUrl;
     } catch (err) {
       console.error('[Cloudinary Upload Error]', err.message);
       return null;
