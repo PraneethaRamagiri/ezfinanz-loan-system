@@ -8,11 +8,12 @@ import { Mail, Lock, Sparkles, ArrowRight } from 'lucide-react';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showAdminInfo, setShowAdminInfo] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const { loginSuccess } = useAuth();
-  const { refreshApplication } = useLoan();
+  const { setApplication, refreshApplication } = useLoan();
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -28,10 +29,12 @@ export default function Login() {
       const res = await api.post('/auth/login', { email, password });
       if (res.success) {
         loginSuccess(res.data.token, res.data.user);
+        if (res.data.application) {
+          setApplication(res.data.application);
+        }
         if (res.data.user.role === 'admin') {
           navigate('/admin/dashboard');
         } else {
-          await refreshApplication();
           navigate('/status');
         }
       }
@@ -48,12 +51,15 @@ export default function Login() {
     try {
       const res = await api.post('/auth/google-login-mock', {
         email: 'google.demo@ezfinanz.com',
-        fullName: 'Google Social Demo'
+        fullName: 'Google Social Demo',
+        createFresh: true
       });
       if (res.success) {
         loginSuccess(res.data.token, res.data.user);
-        await refreshApplication();
-        navigate('/status');
+        if (res.data.application) {
+          setApplication(res.data.application);
+        }
+        navigate('/verify-contact');
       }
     } catch (err) {
       setError(err.message || 'Google mock login failed.');
@@ -169,41 +175,62 @@ export default function Login() {
             </button>
           </div>
 
-          {/* Demo Accounts Quick-Fill Widget */}
+          {/* Demo Accounts & Admin Credentials Quick-Fill Widget */}
           <div className="mt-6 pt-6 border-t border-slate-100">
-            <p className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2.5 text-center">Auto-Fill Demo Accounts</p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">Auto-Fill Demo Accounts</p>
+              <button
+                type="button"
+                onClick={() => setShowAdminInfo(!showAdminInfo)}
+                className="text-xs font-bold text-purple-700 hover:text-purple-900 underline cursor-pointer"
+              >
+                🔑 Click here for Admin Credentials
+              </button>
+            </div>
+
+            {showAdminInfo && (
+              <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-950 space-y-1">
+                <div className="font-extrabold flex items-center justify-between">
+                  <span>🛡️ System Admin Access:</span>
+                  <span className="bg-purple-200 text-purple-900 text-[10px] px-2 py-0.5 rounded-md uppercase font-black">Role: Admin</span>
+                </div>
+                <p><span className="text-purple-700 font-semibold">Email:</span> <code className="bg-purple-100 px-1.5 py-0.5 rounded font-mono font-bold">admin@ezfinanz.com</code></p>
+                <p><span className="text-purple-700 font-semibold">Password:</span> <code className="bg-purple-100 px-1.5 py-0.5 rounded font-mono font-bold">Admin@123456</code></p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('admin@ezfinanz.com');
+                    setPassword('Admin@123456');
+                    setError('');
+                  }}
+                  className="mt-1.5 w-full py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg text-center transition-colors cursor-pointer"
+                >
+                  Auto-Fill Admin Credentials & Prepare Login
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-2 text-xs">
               <button
                 type="button"
                 onClick={() => fillDemoAccount('eligible@example.com')}
-                className="p-2.5 bg-emerald-50 text-emerald-900 rounded-xl font-bold hover:bg-emerald-100 text-left border border-emerald-200 transition-colors"
+                className="p-2 bg-emerald-50 text-emerald-900 rounded-xl font-bold hover:bg-emerald-100 text-center border border-emerald-200 transition-colors cursor-pointer"
               >
-                👤 Eligible (Rajesh)
+                👤 Eligible
               </button>
               <button
                 type="button"
                 onClick={() => fillDemoAccount('disbursed@example.com')}
-                className="p-2.5 bg-indigo-50 text-indigo-900 rounded-xl font-bold hover:bg-indigo-100 text-left border border-indigo-200 transition-colors"
+                className="p-2 bg-indigo-50 text-indigo-900 rounded-xl font-bold hover:bg-indigo-100 text-center border border-indigo-200 transition-colors cursor-pointer"
               >
-                💳 Disbursed (Priya)
+                💳 Disbursed
               </button>
               <button
                 type="button"
                 onClick={() => fillDemoAccount('9812345678')}
-                className="p-2.5 bg-amber-50 text-amber-900 rounded-xl font-bold hover:bg-amber-100 text-left border border-amber-200 transition-colors"
+                className="p-2 bg-amber-50 text-amber-900 rounded-xl font-bold hover:bg-amber-100 text-center border border-amber-200 transition-colors cursor-pointer"
               >
-                📱 Phone (9812345678)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail('admin@ezfinanz.com');
-                  setPassword('Admin@123456');
-                  setError('');
-                }}
-                className="p-2.5 bg-purple-50 text-purple-900 rounded-xl font-bold hover:bg-purple-100 text-left border border-purple-200 transition-colors"
-              >
-                🛡️ Admin Portal
+                📱 Mobile
               </button>
             </div>
           </div>

@@ -10,27 +10,23 @@ export default function ApplicationStatus() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!application) {
-      refreshApplication();
-    }
-  }, [application, refreshApplication]);
-
-  useEffect(() => {
     if (application?.currentStage === 'DISBURSED') {
       navigate('/disbursement');
     }
   }, [application, navigate]);
 
-  if (loading) {
+  if (loading && !application) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <Navbar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
+        <Stepper currentStep={1} currentStage={application?.currentStage} />
+        <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8">
+          <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-md text-center py-12">
             <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-sm font-bold text-slate-600">Fetching application status timeline...</p>
+            <p className="text-sm font-bold text-slate-700">Loading your loan application status...</p>
+            <p className="text-xs text-slate-500 mt-1 font-medium">Connecting to EZFinanz digital portal...</p>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -104,7 +100,7 @@ export default function ApplicationStatus() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <Navbar />
-      <Stepper currentStep={currentStepNum} />
+      <Stepper currentStep={currentStepNum} currentStage={currentStage} />
 
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-8 space-y-6">
         {/* Hero Header Card */}

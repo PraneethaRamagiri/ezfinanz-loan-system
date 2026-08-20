@@ -22,8 +22,25 @@ exports.signup = async (req, res, next) => {
       });
     }
 
+    const cleanName = fullName.trim();
+    const nameRegex = /^[a-zA-Z\s.-]{2,50}$/;
+    if (!nameRegex.test(cleanName)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_NAME', message: 'Full name must contain only letters and spaces (e.g. Rajesh Kumar). Numbers are not allowed.' }
+      });
+    }
+
     const cleanEmail = email.toLowerCase().trim();
     const cleanPhone = phone.replace(/\s+/g, '').trim();
+
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_PHONE', message: 'Please provide a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9 (e.g. 9876543210).' }
+      });
+    }
 
     const existingUser = await User.findOne({ $or: [{ email: cleanEmail }, { phone: cleanPhone }] });
     if (existingUser) {
@@ -35,7 +52,7 @@ exports.signup = async (req, res, next) => {
 
     const userRole = role === 'admin' ? 'admin' : 'customer';
     const user = await User.create({
-      fullName,
+      fullName: cleanName,
       email: cleanEmail,
       phone: cleanPhone,
       password,
@@ -93,7 +110,10 @@ exports.login = async (req, res, next) => {
     }
 
     const isEmail = rawIdentifier.includes('@');
-    const normalizedIdentifier = isEmail ? rawIdentifier.toLowerCase() : rawIdentifier.replace(/\s+/g, '');
+    let normalizedIdentifier = isEmail ? rawIdentifier.toLowerCase() : rawIdentifier.replace(/\s+/g, '');
+    if (!isEmail) {
+      normalizedIdentifier = normalizedIdentifier.replace(/[^0-9]/g, '');
+    }
 
     const user = await User.findOne({
       $or: [
@@ -144,15 +164,15 @@ exports.login = async (req, res, next) => {
 // Simulated Google OAuth Login
 exports.googleLoginMock = async (req, res, next) => {
   try {
-    const { email, fullName, googleId } = req.body;
-    const userEmail = email || `google.user.${Date.now()}@example.com`;
+    const { email, fullName, googleId, createFresh } = req.body;
+    const userEmail = email || `google.demo.${Date.now()}@ezfinanz.com`;
 
     let user = await User.findOne({ email: userEmail });
     if (!user) {
       user = await User.create({
-        fullName: fullName || 'Google User',
+        fullName: fullName || 'Google Social Demo',
         email: userEmail,
-        phone: `99${Math.floor(10000000 + Math.random() * 90000000)}`,
+        phone: `98${Math.floor(10000000 + Math.random() * 90000000)}`,
         googleId: googleId || `google_${Date.now()}`,
         role: 'customer',
         isEmailVerified: true
@@ -160,12 +180,17 @@ exports.googleLoginMock = async (req, res, next) => {
     }
 
     let application = await LoanApplication.findOne({ user: user._id });
-    if (!application && user.role === 'customer') {
-      application = await LoanApplication.create({
-        applicationNumber: `EZF-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        user: user._id,
-        currentStage: 'EMAIL_VERIFIED'
-      });
+    if (!application || createFresh) {
+      if (application && createFresh) {
+        application.currentStage = 'EMAIL_VERIFIED';
+        await application.save();
+      } else {
+        application = await LoanApplication.create({
+          applicationNumber: `EZF-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+          user: user._id,
+          currentStage: 'EMAIL_VERIFIED'
+        });
+      }
     }
 
     const token = generateToken(user._id, user.role);

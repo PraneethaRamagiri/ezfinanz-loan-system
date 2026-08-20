@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import api from '../services/api';
 import { useAuth } from './AuthContext';
 
@@ -25,14 +25,23 @@ export const LoanProvider = ({ children }) => {
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const fetchedUserIdRef = useRef(null);
 
-  const fetchApplicationStatus = useCallback(async () => {
+  const fetchApplicationStatus = useCallback(async (force = false) => {
     if (!token || !user || user.role === 'admin') {
       setLoading(false);
       return;
     }
+
+    const currentUserId = user.id || user._id;
+    if (!force && fetchedUserIdRef.current === currentUserId && application) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
+      fetchedUserIdRef.current = currentUserId;
       const res = await api.get('/application/status');
       if (res.success) {
         setApplication(res.data.application);
@@ -43,32 +52,38 @@ export const LoanProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [token, user]);
+  }, [token, user, application]);
 
   useEffect(() => {
-    // Wait until AuthContext finishes checking authentication
     if (authLoading) return;
 
     if (!token || !user) {
       setApplication(null);
+      fetchedUserIdRef.current = null;
       setLoading(false);
       return;
     }
 
     if (user.role === 'customer') {
-      fetchApplicationStatus();
+      const currentUserId = user.id || user._id;
+      if (fetchedUserIdRef.current !== currentUserId || !application) {
+        fetchApplicationStatus();
+      }
     } else {
       setLoading(false);
     }
-  }, [token, user, authLoading, fetchApplicationStatus]);
+  }, [token, user, authLoading, fetchApplicationStatus, application]);
 
   return (
     <LoanContext.Provider value={{
       application,
-      setApplication,
+      setApplication: (app) => {
+        if (user) fetchedUserIdRef.current = user.id || user._id;
+        setApplication(app);
+      },
       loading,
       error,
-      refreshApplication: fetchApplicationStatus
+      refreshApplication: () => fetchApplicationStatus(true)
     }}>
       {children}
     </LoanContext.Provider>
@@ -76,3 +91,4 @@ export const LoanProvider = ({ children }) => {
 };
 
 export const useLoan = () => useContext(LoanContext);
+
